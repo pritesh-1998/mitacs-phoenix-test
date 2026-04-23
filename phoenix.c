@@ -24,6 +24,7 @@ static int mode = MODE_OFF;
 
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
+#define SYSCALL_READ  2
 
 static int selected_syscall = SYSCALL_NONE;
 
@@ -38,17 +39,27 @@ static int target_pid = -1;   /* -1 means all processes */
 #define IOCTL_SET_SYSCALL _IOW(PHX_MAGIC, 2, int)
 #define IOCTL_SET_PID     _IOW(PHX_MAGIC, 3, int)
 
-/* ---------- KPROBE HANDLER ---------- */
+/* ---------- COMMON CHECK ---------- */
 
-static int write_handler(struct kprobe *p, struct pt_regs *regs)
+static int should_log_this_syscall(int wanted_syscall)
 {
     if (mode != MODE_LOG)
         return 0;
 
-    if (selected_syscall != SYSCALL_WRITE)
+    if (selected_syscall != wanted_syscall)
         return 0;
 
     if (target_pid != -1 && current->pid != target_pid)
+        return 0;
+
+    return 1;
+}
+
+/* ---------- KPROBE HANDLERS ---------- */
+
+static int write_handler(struct kprobe *p, struct pt_regs *regs)
+{
+    if (!should_log_this_syscall(SYSCALL_WRITE))
         return 0;
 
     printk(KERN_INFO "[phoenix] write syscall pid=%d comm=%s\n",
@@ -57,11 +68,27 @@ static int write_handler(struct kprobe *p, struct pt_regs *regs)
     return 0;
 }
 
-/* ---------- KPROBE ---------- */
+static int read_handler(struct kprobe *p, struct pt_regs *regs)
+{
+    if (!should_log_this_syscall(SYSCALL_READ))
+        return 0;
+
+    printk(KERN_INFO "[phoenix] read syscall pid=%d comm=%s\n",
+           current->pid, current->comm);
+
+    return 0;
+}
+
+/* ---------- KPROBES ---------- */
 
 static struct kprobe kp_write = {
     .symbol_name = "ksys_write",
     .pre_handler = write_handler,
+};
+
+static struct kprobe kp_read = {
+    .symbol_name = "ksys_read",
+    .pre_handler = read_handler,
 };
 
 /* ---------- IOCTL HANDLER ---------- */
@@ -133,6 +160,13 @@ static int __init phoenix_init(void)
         return ret;
     }
 
+    ret = register_kprobe(&kp_read);
+    if (ret) {
+        unregister_kprobe(&kp_write);
+        misc_deregister(&phoenix_device);
+        return ret;
+    }
+
     printk(KERN_INFO "[phoenix] ready (/dev/phoenix_ctl)\n");
     return 0;
 }
@@ -141,6 +175,7 @@ static int __init phoenix_init(void)
 
 static void __exit phoenix_exit(void)
 {
+    unregister_kprobe(&kp_read);
     unregister_kprobe(&kp_write);
     misc_deregister(&phoenix_device);
     printk(KERN_INFO "[phoenix] unloaded\n");

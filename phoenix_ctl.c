@@ -18,6 +18,7 @@
 
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
+#define SYSCALL_READ  2
 
 int main(int argc, char *argv[])
 {
@@ -50,8 +51,10 @@ int main(int argc, char *argv[])
 
             if (strcmp(argv[i], "write") == 0) {
                 syscall_choice = SYSCALL_WRITE;
+            } else if (strcmp(argv[i], "read") == 0) {
+                syscall_choice = SYSCALL_READ;
             } else {
-                printf("Error: only 'write' is supported in this step\n");
+                printf("Error: only 'write' and 'read' are supported in this step\n");
                 close(fd);
                 return 1;
             }
