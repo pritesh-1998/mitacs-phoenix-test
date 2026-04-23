@@ -19,6 +19,7 @@
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
 #define SYSCALL_READ  2
+#define SYSCALL_OPEN  3
 
 int main(int argc, char *argv[])
 {
@@ -53,8 +54,10 @@ int main(int argc, char *argv[])
                 syscall_choice = SYSCALL_WRITE;
             } else if (strcmp(argv[i], "read") == 0) {
                 syscall_choice = SYSCALL_READ;
+            } else if (strcmp(argv[i], "open") == 0) {
+                syscall_choice = SYSCALL_OPEN;
             } else {
-                printf("Error: only 'write' and 'read' are supported in this step\n");
+                printf("Error: supported syscalls are: write, read, open\n");
                 close(fd);
                 return 1;
             }

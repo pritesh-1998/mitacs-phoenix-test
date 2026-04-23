@@ -25,6 +25,7 @@ static int mode = MODE_OFF;
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
 #define SYSCALL_READ  2
+#define SYSCALL_OPEN  3
 
 static int selected_syscall = SYSCALL_NONE;
 
@@ -79,6 +80,17 @@ static int read_handler(struct kprobe *p, struct pt_regs *regs)
     return 0;
 }
 
+static int open_handler(struct kprobe *p, struct pt_regs *regs)
+{
+    if (!should_log_this_syscall(SYSCALL_OPEN))
+        return 0;
+
+    printk(KERN_INFO "[phoenix] open syscall pid=%d comm=%s\n",
+           current->pid, current->comm);
+
+    return 0;
+}
+
 /* ---------- KPROBES ---------- */
 
 static struct kprobe kp_write = {
@@ -89,6 +101,11 @@ static struct kprobe kp_write = {
 static struct kprobe kp_read = {
     .symbol_name = "ksys_read",
     .pre_handler = read_handler,
+};
+
+static struct kprobe kp_open = {
+    .symbol_name = "do_sys_openat2",
+    .pre_handler = open_handler,
 };
 
 /* ---------- IOCTL HANDLER ---------- */
@@ -167,6 +184,14 @@ static int __init phoenix_init(void)
         return ret;
     }
 
+    ret = register_kprobe(&kp_open);
+    if (ret) {
+        unregister_kprobe(&kp_read);
+        unregister_kprobe(&kp_write);
+        misc_deregister(&phoenix_device);
+        return ret;
+    }
+
     printk(KERN_INFO "[phoenix] ready (/dev/phoenix_ctl)\n");
     return 0;
 }
@@ -175,6 +200,7 @@ static int __init phoenix_init(void)
 
 static void __exit phoenix_exit(void)
 {
+    unregister_kprobe(&kp_open);
     unregister_kprobe(&kp_read);
     unregister_kprobe(&kp_write);
     misc_deregister(&phoenix_device);
