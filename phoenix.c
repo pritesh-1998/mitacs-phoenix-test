@@ -27,6 +27,7 @@ static int mode = MODE_OFF;
 #define SYSCALL_READ  2
 
 static int selected_syscall = SYSCALL_NONE;
+static int last_event = SYSCALL_NONE;
 
 /* ---------- PID FILTER ---------- */
 
@@ -38,7 +39,7 @@ static int target_pid = -1;
 #define IOCTL_SET_MODE    _IOW(PHX_MAGIC, 1, int)
 #define IOCTL_SET_SYSCALL _IOW(PHX_MAGIC, 2, int)
 #define IOCTL_SET_PID     _IOW(PHX_MAGIC, 3, int)
-
+#define IOCTL_GET_EVENT   _IOR(PHX_MAGIC, 4, int)
 /* ---------- COMMON MATCH CHECK ---------- */
 
 static int syscall_matches_target(int wanted_syscall)
@@ -58,7 +59,7 @@ static int write_handler(struct kprobe *p, struct pt_regs *regs)
 {
     unsigned long fd;
     unsigned long count;
-
+    last_event = SYSCALL_WRITE;
     if (mode == MODE_OFF)
         return 0;
 
@@ -67,13 +68,14 @@ static int write_handler(struct kprobe *p, struct pt_regs *regs)
 
     fd = regs->di;
     count = regs->dx;
-
     if (mode == MODE_LOG) {
+        last_event = SYSCALL_WRITE;
         printk(KERN_INFO "[phoenix] write syscall pid=%d comm=%s fd=%lu count=%lu\n",
-               current->pid, current->comm, fd, count);
+            current->pid, current->comm, fd, count);
     } else if (mode == MODE_BLOCK) {
-        printk(KERN_INFO "[phoenix] BLOCK match for write pid=%d comm=%s fd=%lu count=%lu\n",
-               current->pid, current->comm, fd, count);
+        last_event = SYSCALL_WRITE;
+        printk(KERN_INFO "[phoenix] BLOCKED write pid=%d comm=%s fd=%lu count=%lu (soft block)\n",
+            current->pid, current->comm, fd, count);
     }
 
     return 0;
@@ -83,7 +85,7 @@ static int read_handler(struct kprobe *p, struct pt_regs *regs)
 {
     unsigned long fd;
     unsigned long count;
-
+    last_event = SYSCALL_READ;
     if (mode == MODE_OFF)
         return 0;
 
@@ -94,11 +96,13 @@ static int read_handler(struct kprobe *p, struct pt_regs *regs)
     count = regs->dx;
 
     if (mode == MODE_LOG) {
+        last_event = SYSCALL_READ;
         printk(KERN_INFO "[phoenix] read syscall pid=%d comm=%s fd=%lu count=%lu\n",
-               current->pid, current->comm, fd, count);
+            current->pid, current->comm, fd, count);
     } else if (mode == MODE_BLOCK) {
-        printk(KERN_INFO "[phoenix] BLOCK match for read pid=%d comm=%s fd=%lu count=%lu\n",
-               current->pid, current->comm, fd, count);
+        last_event = SYSCALL_READ;
+        printk(KERN_INFO "[phoenix] BLOCKED read pid=%d comm=%s fd=%lu count=%lu (soft block)\n",
+            current->pid, current->comm, fd, count);
     }
 
     return 0;
@@ -143,7 +147,14 @@ static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg
         target_pid = val;
         printk(KERN_INFO "[phoenix] target_pid=%d\n", target_pid);
         break;
+    case IOCTL_GET_EVENT:
+        val = last_event;
+        last_event = SYSCALL_NONE;
 
+        if (copy_to_user((int __user *)arg, &val, sizeof(int)))
+            return -EFAULT;
+
+        break;
     default:
         return -EINVAL;
     }

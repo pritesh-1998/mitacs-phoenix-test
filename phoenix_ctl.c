@@ -11,6 +11,7 @@
 #define IOCTL_SET_MODE    _IOW(PHX_MAGIC, 1, int)
 #define IOCTL_SET_SYSCALL _IOW(PHX_MAGIC, 2, int)
 #define IOCTL_SET_PID     _IOW(PHX_MAGIC, 3, int)
+#define IOCTL_GET_EVENT   _IOR(PHX_MAGIC, 4, int)
 
 #define MODE_OFF   0
 #define MODE_LOG   1
@@ -26,7 +27,7 @@ int main(int argc, char *argv[])
     int mode = -1;
     int syscall_choice = SYSCALL_NONE;
     int pid_value = -2;   /* -2 means user did not provide pid */
-
+    int get_event = 0;
     printf("Phoenix controller\n");
 
     fd = open(DEVICE, O_RDWR);
@@ -42,7 +43,9 @@ int main(int argc, char *argv[])
             mode = MODE_BLOCK;
         } else if (strcmp(argv[i], "--off") == 0) {
             mode = MODE_OFF;
-        } else if (strcmp(argv[i], "--syscall") == 0) {
+        } else if (strcmp(argv[i], "--get-event") == 0) {
+            get_event = 1;
+        }else if (strcmp(argv[i], "--syscall") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: --syscall needs a value\n");
                 close(fd);
@@ -103,6 +106,24 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (get_event) {
+        int event_value = SYSCALL_NONE;
+
+        if (ioctl(fd, IOCTL_GET_EVENT, &event_value) < 0) {
+            perror("ioctl GET_EVENT failed");
+            close(fd);
+            return 1;
+        }
+
+        if (event_value == SYSCALL_WRITE) {
+            printf("Last observed syscall event: write\n");
+        } else if (event_value == SYSCALL_READ) {
+            printf("Last observed syscall event: read\n");
+        } else {
+            printf("No syscall event observed\n");
+        }
+    }
+    
     close(fd);
     printf("Done\n");
     return 0;
