@@ -19,7 +19,6 @@
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
 #define SYSCALL_READ  2
-#define SYSCALL_OPEN  3
 
 int main(int argc, char *argv[])
 {
@@ -39,6 +38,8 @@ int main(int argc, char *argv[])
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--log") == 0) {
             mode = MODE_LOG;
+        } else if (strcmp(argv[i], "--block") == 0) {
+            mode = MODE_BLOCK;
         } else if (strcmp(argv[i], "--off") == 0) {
             mode = MODE_OFF;
         } else if (strcmp(argv[i], "--syscall") == 0) {
@@ -55,9 +56,11 @@ int main(int argc, char *argv[])
             } else if (strcmp(argv[i], "read") == 0) {
                 syscall_choice = SYSCALL_READ;
             } else if (strcmp(argv[i], "open") == 0) {
-                syscall_choice = SYSCALL_OPEN;
+                printf("Error: open is disabled because it is unstable on this kernel\n");
+                close(fd);
+                return 1;
             } else {
-                printf("Error: supported syscalls are: write, read, open\n");
+                printf("Error: supported syscalls are: write, read\n");
                 close(fd);
                 return 1;
             }

@@ -25,13 +25,12 @@ static int mode = MODE_OFF;
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
 #define SYSCALL_READ  2
-#define SYSCALL_OPEN  3
 
 static int selected_syscall = SYSCALL_NONE;
 
 /* ---------- PID FILTER ---------- */
 
-static int target_pid = -1;   /* -1 means all processes */
+static int target_pid = -1;
 
 /* ---------- IOCTL ---------- */
 
@@ -40,13 +39,10 @@ static int target_pid = -1;   /* -1 means all processes */
 #define IOCTL_SET_SYSCALL _IOW(PHX_MAGIC, 2, int)
 #define IOCTL_SET_PID     _IOW(PHX_MAGIC, 3, int)
 
-/* ---------- COMMON CHECK ---------- */
+/* ---------- COMMON MATCH CHECK ---------- */
 
-static int should_log_this_syscall(int wanted_syscall)
+static int syscall_matches_target(int wanted_syscall)
 {
-    if (mode != MODE_LOG)
-        return 0;
-
     if (selected_syscall != wanted_syscall)
         return 0;
 
@@ -56,37 +52,54 @@ static int should_log_this_syscall(int wanted_syscall)
     return 1;
 }
 
-/* ---------- KPROBE HANDLERS ---------- */
+/* ---------- HANDLERS ---------- */
 
 static int write_handler(struct kprobe *p, struct pt_regs *regs)
 {
-    if (!should_log_this_syscall(SYSCALL_WRITE))
+    unsigned long fd;
+    unsigned long count;
+
+    if (mode == MODE_OFF)
         return 0;
 
-    printk(KERN_INFO "[phoenix] write syscall pid=%d comm=%s\n",
-           current->pid, current->comm);
+    if (!syscall_matches_target(SYSCALL_WRITE))
+        return 0;
+
+    fd = regs->di;
+    count = regs->dx;
+
+    if (mode == MODE_LOG) {
+        printk(KERN_INFO "[phoenix] write syscall pid=%d comm=%s fd=%lu count=%lu\n",
+               current->pid, current->comm, fd, count);
+    } else if (mode == MODE_BLOCK) {
+        printk(KERN_INFO "[phoenix] BLOCK match for write pid=%d comm=%s fd=%lu count=%lu\n",
+               current->pid, current->comm, fd, count);
+    }
 
     return 0;
 }
 
 static int read_handler(struct kprobe *p, struct pt_regs *regs)
 {
-    if (!should_log_this_syscall(SYSCALL_READ))
+    unsigned long fd;
+    unsigned long count;
+
+    if (mode == MODE_OFF)
         return 0;
 
-    printk(KERN_INFO "[phoenix] read syscall pid=%d comm=%s\n",
-           current->pid, current->comm);
-
-    return 0;
-}
-
-static int open_handler(struct kprobe *p, struct pt_regs *regs)
-{
-    if (!should_log_this_syscall(SYSCALL_OPEN))
+    if (!syscall_matches_target(SYSCALL_READ))
         return 0;
 
-    printk(KERN_INFO "[phoenix] open syscall pid=%d comm=%s\n",
-           current->pid, current->comm);
+    fd = regs->di;
+    count = regs->dx;
+
+    if (mode == MODE_LOG) {
+        printk(KERN_INFO "[phoenix] read syscall pid=%d comm=%s fd=%lu count=%lu\n",
+               current->pid, current->comm, fd, count);
+    } else if (mode == MODE_BLOCK) {
+        printk(KERN_INFO "[phoenix] BLOCK match for read pid=%d comm=%s fd=%lu count=%lu\n",
+               current->pid, current->comm, fd, count);
+    }
 
     return 0;
 }
@@ -103,12 +116,7 @@ static struct kprobe kp_read = {
     .pre_handler = read_handler,
 };
 
-static struct kprobe kp_open = {
-    .symbol_name = "do_sys_openat2",
-    .pre_handler = open_handler,
-};
-
-/* ---------- IOCTL HANDLER ---------- */
+/* ---------- IOCTL ---------- */
 
 static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -118,7 +126,6 @@ static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg
     case IOCTL_SET_MODE:
         if (copy_from_user(&val, (int __user *)arg, sizeof(int)))
             return -EFAULT;
-
         mode = val;
         printk(KERN_INFO "[phoenix] mode=%d\n", mode);
         break;
@@ -126,7 +133,6 @@ static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg
     case IOCTL_SET_SYSCALL:
         if (copy_from_user(&val, (int __user *)arg, sizeof(int)))
             return -EFAULT;
-
         selected_syscall = val;
         printk(KERN_INFO "[phoenix] selected_syscall=%d\n", selected_syscall);
         break;
@@ -134,7 +140,6 @@ static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg
     case IOCTL_SET_PID:
         if (copy_from_user(&val, (int __user *)arg, sizeof(int)))
             return -EFAULT;
-
         target_pid = val;
         printk(KERN_INFO "[phoenix] target_pid=%d\n", target_pid);
         break;
@@ -159,7 +164,7 @@ static struct miscdevice phoenix_device = {
     .fops  = &fops,
 };
 
-/* ---------- INIT ---------- */
+/* ---------- INIT / EXIT ---------- */
 
 static int __init phoenix_init(void)
 {
@@ -184,23 +189,12 @@ static int __init phoenix_init(void)
         return ret;
     }
 
-    ret = register_kprobe(&kp_open);
-    if (ret) {
-        unregister_kprobe(&kp_read);
-        unregister_kprobe(&kp_write);
-        misc_deregister(&phoenix_device);
-        return ret;
-    }
-
     printk(KERN_INFO "[phoenix] ready (/dev/phoenix_ctl)\n");
     return 0;
 }
 
-/* ---------- EXIT ---------- */
-
 static void __exit phoenix_exit(void)
 {
-    unregister_kprobe(&kp_open);
     unregister_kprobe(&kp_read);
     unregister_kprobe(&kp_write);
     misc_deregister(&phoenix_device);
