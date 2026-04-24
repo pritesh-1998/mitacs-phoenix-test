@@ -12,7 +12,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Pritesh Lathia");
 MODULE_DESCRIPTION("Phoenix syscall monitor");
 
-/* ---------- MODES ---------- */
+// MODES global for easy access
 
 #define MODE_OFF   0
 #define MODE_LOG   1
@@ -20,7 +20,7 @@ MODULE_DESCRIPTION("Phoenix syscall monitor");
 
 static int mode = MODE_OFF;
 
-/* ---------- SYSCALL CHOICES ---------- */
+//SYSCALL CHOICES
 
 #define SYSCALL_NONE  0
 #define SYSCALL_WRITE 1
@@ -29,18 +29,18 @@ static int mode = MODE_OFF;
 static int selected_syscall = SYSCALL_NONE;
 static int last_event = SYSCALL_NONE;
 
-/* ---------- PID FILTER ---------- */
+// PID FILTER
 
 static int target_pid = -1;
 
-/* ---------- IOCTL ---------- */
+// IOCTL
 
 #define PHX_MAGIC 'P'
 #define IOCTL_SET_MODE    _IOW(PHX_MAGIC, 1, int)
 #define IOCTL_SET_SYSCALL _IOW(PHX_MAGIC, 2, int)
 #define IOCTL_SET_PID     _IOW(PHX_MAGIC, 3, int)
 #define IOCTL_GET_EVENT   _IOR(PHX_MAGIC, 4, int)
-/* ---------- COMMON MATCH CHECK ---------- */
+
 
 static int syscall_matches_target(int wanted_syscall)
 {
@@ -53,7 +53,7 @@ static int syscall_matches_target(int wanted_syscall)
     return 1;
 }
 
-/* ---------- HANDLERS ---------- */
+// HANDLERS
 
 static int write_handler(struct kprobe *p, struct pt_regs *regs)
 {
@@ -108,7 +108,7 @@ static int read_handler(struct kprobe *p, struct pt_regs *regs)
     return 0;
 }
 
-/* ---------- KPROBES ---------- */
+// KPROBES
 
 static struct kprobe kp_write = {
     .symbol_name = "ksys_write",
@@ -120,7 +120,7 @@ static struct kprobe kp_read = {
     .pre_handler = read_handler,
 };
 
-/* ---------- IOCTL ---------- */
+// IOCTL
 
 static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -162,7 +162,7 @@ static long phoenix_ioctl(struct file *file, unsigned int cmd, unsigned long arg
     return 0;
 }
 
-/* ---------- DEVICE ---------- */
+// DEVICE
 
 static const struct file_operations fops = {
     .owner = THIS_MODULE,
@@ -175,7 +175,7 @@ static struct miscdevice phoenix_device = {
     .fops  = &fops,
 };
 
-/* ---------- INIT / EXIT ---------- */
+// INIT / EXIT
 
 static int __init phoenix_init(void)
 {

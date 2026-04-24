@@ -45,8 +45,7 @@ static const char *syscall_to_name(int syscall_id)
     return "none";
 }
 
-/* Very simple beginner JSON parser.
-   It only looks for words "write" and "read" inside the file. */
+// here It only looks for words write and read inside the file.
 static int load_fsm_file(const char *filename, int states[])
 {
     FILE *fp;
@@ -284,8 +283,7 @@ int main(int argc, char *argv[])
 
     if (pid_value != -2) {
         if (set_pid_ioctl(fd, pid_value) < 0) {
-            close(fd);
-            return 1;
+            close(fd);return 1;
         }
     }
 
